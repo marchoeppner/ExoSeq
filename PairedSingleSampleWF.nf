@@ -75,12 +75,10 @@ params.exome = false //default genome, set to true to run restricting to exome p
 params.aligner = 'bwa' //Default, but stay tuned for later ;-) 
 params.saveReference = true
 
-
 // Output configuration
 params.outdir = './results'
 params.saveAlignedIntermediates = false
 params.saveIntermediateVariants = false
-
 
 // Clipping options
 params.notrim = false
@@ -313,54 +311,26 @@ process bwamem {
     file(bwa_index) from bwa_index
 
     output:
-    set val(name), file("${name}_bwa.sam") into raw_aln_sam
+    set val(name), file("${name}_bwa.${bam_suffix}") samples_sorted_bam
     file '.command.log' into bwa_stdout
 
-
     script:
+    
+    def avail_mem = task.memory ? "-m ${task.memory.toMega().intdiv(task.cpus)}M" : ''
     rg="\'@RG\\tID:${params.run_id}\\tSM:${params.run_id}\\tPL:illumina\'"
+    
     """
     bwa mem \\
     -R $rg \\
     -t ${task.cpus} \\
     $params.gfasta \\
     $reads \\
-    > ${name}_bwa.sam
+    || samtools ${avail_mem} sort -O bam - > $outfile ${name}_bwa.bam
     """
 }
 
 /*
-*  STEP 3 - Convert to BAM, sort BAM  
-*/ 
-
-process sortSam {
-    tag "${name}"
-    publishDir "${params.outdir}/BWAmem", mode: 'copy',
-        saveAs: {filename -> params.saveAlignedIntermediates ? "$filename" : null }
-    
-    input:
-    set val(name), file(raw_sam) from raw_aln_sam
-    
-
-    output: 
-    set val(name), file("${raw_sam}.sorted.bam") into samples_sorted_bam
-    file '.command.log' into samtools_stdout
-
-
-    script:
-    def avail_mem = task.memory ? "-m ${task.memory.toMega().intdiv(task.cpus)}" : ''
-    """
-    samtools sort \\
-        $raw_sam \\
-        -@ ${task.cpus}\\
-        ${avail_mem}M \\
-        -o ${raw_sam}.sorted.bam
-    """
-}
-
-
-/*
-*  STEP 4 - Mark PCR duplicates in sorted BAM file
+*  STEP 3 - Mark PCR duplicates in sorted BAM file
 */ 
 
 process markDuplicates {
