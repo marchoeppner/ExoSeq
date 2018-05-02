@@ -36,7 +36,7 @@ given. The available paramaters are listed below based on category
 
 Required parameters:
 --reads	                       Absolute path to project directory (excludes the --samples option)
---samples		       A CSV formatted file containing sample information (excludes the --reads option)
+--samples		       A CSV formatted file containing sample information (excludes the --reads option, see README for formatting hints)
 --genome                       Name of iGenomes reference
 
 Output:
@@ -77,6 +77,7 @@ params.outdir = './results'
 params.saveAlignedIntermediates = false
 params.saveIntermediateVariants = false
 params.bam = false // default alignment format is CRAM
+suffix = params.bam ? "bam" : "cram" // format switching is done via the file extension
 
 // Clipping options
 params.notrim = false
@@ -237,12 +238,12 @@ process bwamem {
     -R $rg \\
     -t ${task.cpus} \\
     ${params.gfasta} \\
-    $R1 $R2 | samtools ${avail_mem} sort -O bam - > ${bam}
+    $R1 $R2 | samtools ${avail_mem} sort --reference ${params.gfasta} -O bam - > ${bam}
     """
 }
 
 /*
-* Merge BAM files per sample
+* Merge BAM files per sample 
 */
 
 bwa_grouped_by_sample = samples_sorted_bam.groupTuple(by: [0,1])
@@ -347,7 +348,7 @@ process applyBQSR {
     set val(patientID), val(sampleID), file(clean_bam), file(clean_bai) into bam_vcall, bam_metrics, bam_for_multiple_metrics, bam_for_hs_metrics
 
     script:
-    clean_bam = patientID + "_" + sampleID + "clean.bam"
+    clean_bam = patientID + "_" + sampleID + "clean.${suffix}"
     clean_bai = clean_bam + ".bai"
     """
     gatk-launch ApplyBQSR \\
@@ -487,7 +488,7 @@ process get_software_versions {
     bwa &> v_bwa.txt 2>&1 || true
     gatk-launch BaseRecalibrator --version &> v_gatk.txt
     multiqc --version &> v_multiqc.txt
-    scrape_software_versions.py &> software_versions_mqc.yaml
+    ${workflow.projectDir}/bin/scrape_software_versions.py &> software_versions_mqc.yaml
     """
 }
 
@@ -543,11 +544,11 @@ process multiqc_fastq {
     file ('software_versions/*') from software_versions_yaml.toList()
 
     output:
-    file '*multiqc_report_fastq.html' into multiqc_report_fastq
+    file '*multiqc_report.html' into multiqc_report_fastq
 
     script:
     rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
-    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report_fastq" : ''
+    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
     
     """
     multiqc -f $rtitle $rfilename --config $multiQCconfig . 
@@ -566,11 +567,11 @@ process multiqc_sample {
     file ('software_versions/*') from software_versions_yaml.toList()
 
     output:
-    file '*multiqc_report_sample.html' into multiqc_report_sample
+    file '*multiqc_report.html' into multiqc_report_sample
 
     script:
     rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
-    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report_sample" : ''
+    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
     
     """
     multiqc -f $rtitle $rfilename --config $multiQCconfig .
