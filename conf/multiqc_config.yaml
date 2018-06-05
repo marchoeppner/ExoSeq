@@ -2,6 +2,11 @@ extra_fn_clean_exts:
     - _R1
     - _R2
 
+top_modules:
+- 'general_stats'
+- 'picard_hsmetrics'
+- 'software_versions'
+
 report_section_order:
     ngi-exoseq:
         order: -1000

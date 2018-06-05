@@ -190,7 +190,7 @@ if(params.notrim){
     trimgalore_logs = []
 } else {
     process trim_galore {
-        tag "${patientID}|${sampleID}|${libraryID}"
+        tag "${patientID}|${sampleID}|${libraryID}|${rgID}"
         publishDir "${params.outdir}/trim_galore", mode: 'copy'
 
         input:
@@ -218,7 +218,7 @@ if(params.notrim){
 */
 
 process bwamem {
-    tag "${patientID}|${sampleID}"
+    tag "${patientID}|${sampleID}|${libraryID}|${rgID}"
 
     input:
     set val(patientID),val(sampleID),val(libraryID),val(rgID), file(R1),file(R2) from trimmed_reads
@@ -229,7 +229,7 @@ process bwamem {
 
     script:
     bam = sampleID + "_" + libraryID + "_" + rgID  + "_bwa.bam"
-    avail_mem = task.memory ? "-m ${task.memory.toMega().intdiv(task.cpus)}M" : ''
+    avail_mem = task.memory ? "-m 4000M" : ''
     rg="\'@RG\\tID:${rgID}\\tLB:${libraryID}\\tSM:${sampleID}\\tDS:${params.gfasta}\\tPL:illumina\'"
         
     """
@@ -238,7 +238,7 @@ process bwamem {
     -R $rg \\
     -t ${task.cpus} \\
     ${params.gfasta} \\
-    $R1 $R2 | samtools ${avail_mem} sort --reference ${params.gfasta} -O bam - > ${bam}
+    $R1 $R2 | samtools sort ${avail_mem} --reference ${params.gfasta} -O bam - > ${bam}
     """
 }
 
@@ -259,7 +259,7 @@ process merge_bam_by_sample {
 	set val(patientID),val(sampleID),file(merged_bam) into merged_bam_by_sample
 
 	script:
-	merged_bam = sampleID + "_merged.bam"
+	merged_bam = patientID + "_" + sampleID + "_merged.bam"
 
 	"""
 		picard MergeSamFiles \
@@ -290,13 +290,13 @@ process markDuplicates {
 
     script:
     dedup_bam = patientID + "_" + sampleID + "_dedup.bam"
-    dedup_bai = dedup_bam + ".bai"
+    dedup_bai = patientID + "_" + sampleID + "_dedup.bai"
     metrics = patientID + "_" + sampleID + "_dedup_metrics.txt"
 
     """
         mkdir `pwd`/tmp
-        gatk MarkDuplicates \\
-        --INPUT ${sorted_bam} \\
+        gatk-launch MarkDuplicates \\
+        --INPUT ${merged_bam} \\
         --OUTPUT ${dedup_bam} \\
         --METRICS_FILE ${metrics} \\
         --REMOVE_DUPLICATES false \\
@@ -319,7 +319,7 @@ process recal_bam_files {
     set val(patientID),val(sampleID), file(markdup_bam), file(markdup_bam_ind) from samples_markdup_bam
 
     output:
-    set val(patientID),val(sampleID), val(markdup_bam), file(recal_table) into samples_recal_reports
+    set val(patientID),val(sampleID), file(markdup_bam), file(recal_table) into samples_recal_reports
     file '.command.log' into gatk_stdout
     file '.command.log' into gatk_base_recalibration_results
 
@@ -348,7 +348,7 @@ process applyBQSR {
     set val(patientID), val(sampleID), file(clean_bam), file(clean_bai) into bam_vcall, bam_metrics, bam_for_multiple_metrics, bam_for_hs_metrics
 
     script:
-    clean_bam = patientID + "_" + sampleID + "clean.${suffix}"
+    clean_bam = patientID + "_" + sampleID + "_clean.${suffix}"
     clean_bai = clean_bam + ".bai"
     """
     gatk-launch ApplyBQSR \\
@@ -382,7 +382,7 @@ process picard_multiple_metrics {
 	prefix = patientID + "_" + sampleID
 
 	"""
-		picard CollectMultipleMetrics \
+		picard -Xms1G -Xmx${task.memory.toGiga()}G CollectMultipleMetrics \
 		PROGRAM=MeanQualityByCycle \
 		PROGRAM=QualityScoreDistribution \
 		PROGRAM=CollectAlignmentSummaryMetrics \
@@ -417,7 +417,7 @@ process picard_hc_metrics {
     outfile = patientID + "_" + sampleID  + ".hybrid_selection_metrics.txt"
 
     """
-        picard CollectHsMetrics \
+        picard -Xms1G -Xmx${task.memory.toGiga()}G CollectHsMetrics \
                INPUT=${bam} \
                OUTPUT=${outfile} \
                TARGET_INTERVALS=${params.target} \
