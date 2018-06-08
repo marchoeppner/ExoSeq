@@ -277,7 +277,7 @@ process merge_bam_by_sample {
 
 process markDuplicates {
     tag "${patientID}|${sampleID}"
-    publishDir "${params.outdir}/Picard_Markduplicates/metrics", mode: 'copy',
+    publishDir "${params.outdir}/Picard/MarkDuplicates", mode: 'copy',
         saveAs: { filename -> filename.indexOf("_dedup_metrics.txt") > 0 ? filename : null }
 
     input:
@@ -313,7 +313,7 @@ process markDuplicates {
 
 process recal_bam_files {
     tag "${patientID}|${sampleID}"
-    publishDir "${params.outdir}/GATK_Recalibration", mode: 'copy'
+    publishDir "${params.outdir}/GATK/Recalibration", mode: 'copy'
 
     input:
     set val(patientID),val(sampleID), file(markdup_bam), file(markdup_bam_ind) from samples_markdup_bam
@@ -339,7 +339,7 @@ process recal_bam_files {
 
 process applyBQSR {
     tag "${patientID}|${sampleID}"
-    publishDir "${params.outdir}/GATK_ApplyBQSR", mode: 'copy'
+    publishDir "${params.outdir}/GATK/ApplyBQSR", mode: 'copy'
 
     input:
     set val(patientID),val(sampleID),file(markdup_bam), file(recal_table) from samples_recal_reports
@@ -370,7 +370,7 @@ process applyBQSR {
 
 process picard_multiple_metrics {
 	tag "${patientID}|${sampleID}"
-	publishDir "${params.outdir}/Processing/Picard_Metrics", mode: 'copy'
+	publishDir "${params.outdir}/Picard/MultipleMetrics", mode: 'copy'
  
 	input:
 	set val(patientID), val(sampleID), file(bam), file(bai) from bam_for_multiple_metrics
@@ -405,7 +405,7 @@ process picard_multiple_metrics {
 process picard_hc_metrics {
 
     tag "${patientID}|${sampleID}"
-    publishDir "${params.outdir}/Picard_Metrics", mode: 'copy'
+    publishDir "${params.outdir}/Picard/HcMetrics", mode: 'copy'
 
     input:
     set val(patientID),val(sampleID), file(bam), file(bai) from bam_for_hs_metrics
@@ -435,7 +435,7 @@ process picard_hc_metrics {
 process variantCall {
 
     tag "${patientID}|${sampleID}"
-    publishDir "${params.outdir}/GATK_VariantCalling/", mode: 'copy'
+    publishDir "${params.outdir}/GATK/HaplotypeCaller", mode: 'copy'
 
     input:
     set val(patientID),val(sampleID), file(realign_bam), file(realign_bam_ind) from bam_vcall
